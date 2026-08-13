@@ -9215,6 +9215,7 @@ var renderTargets = GetRenderTargets(state.CxRegisters);
                 ctx,
                 exportEvaluation.ScalarRegisters,
                 vertexTables,
+                exportState.Program,
                 discoveredInputs);
             if (!ReferenceEquals(merged, discoveredInputs))
             {
