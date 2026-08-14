@@ -4551,8 +4551,8 @@ public static partial class AgcExports
                 dwordCount,
                 ++gpuState.SubmissionSequence,
                 tracePackets,
-                indexSnapshots: null,
-                vertexSnapshots: null);
+                submittedIndexSnapshots,
+                submittedVertexSnapshots);
             DrainResumableDcbs(ctx, gpuState, tracePackets);
         }
 
@@ -4619,8 +4619,8 @@ public static partial class AgcExports
                 dwordCount,
                 ++gpuState.SubmissionSequence,
                 tracePackets,
-                submittedIndexSnapshots,
-                submittedVertexSnapshots);
+                indexSnapshots: null,
+                vertexSnapshots: null);
             DrainResumableDcbs(ctx, gpuState, tracePackets);
         }
 
@@ -9257,10 +9257,14 @@ var renderTargets = GetRenderTargets(state.CxRegisters);
                 exportShaderHeader,
                 out var vertexTables))
         {
+            var resolvedVertexTables =
+                AgcVertexMetadata.AddUserDataScalarRegisterBase(
+                    vertexTables,
+                    exportState.UserDataScalarRegisterBase);
             var merged = AgcVertexMetadata.MergeVertexInputsFromMetadata(
                 ctx,
-                exportEvaluation.ScalarRegisters,
-                vertexTables,
+                exportEvaluation.InitialScalarRegisters,
+                resolvedVertexTables,
                 exportState.Program,
                 discoveredInputs);
             if (!ReferenceEquals(merged, discoveredInputs))
