@@ -72,6 +72,7 @@ public static partial class AgcExports
         ItNop, ItSetBase, ItIndexBufferSize, ItIndexBase, ItDrawIndirect,
         ItDrawIndexIndirect, ItDrawIndex2, ItIndexType, ItDrawIndexAuto,
         ItNumInstances, ItDrawIndexMultiAuto, ItDrawIndexOffset2, ItWriteData,
+        ItMemSemaphore,
         ItDispatchDirect, ItDispatchIndirect, ItCondExec, ItWaitRegMem,
         ItIndirectBuffer, ItEventWrite, ItReleaseMem, ItDmaData,
         ItSetContextReg, ItSetShReg, ItSetUconfigReg, ItGetLodStats,
@@ -5432,6 +5433,23 @@ public static partial class AgcExports
                     tracePackets);
             }
 
+            if (op == ItMemSemaphore)
+            {
+                if (HandleSubmittedMemSemaphore(
+                        ctx,
+                        gpuState,
+                        state,
+                        commandAddress,
+                        currentAddress,
+                        offset,
+                        length,
+                        dwordCount,
+                        tracePackets))
+                {
+                    return true;
+                }
+            }
+
             if (op == ItNop && register == RWriteData && length >= 4)
             {
                 ApplySubmittedWriteData(
@@ -5968,6 +5986,7 @@ public static partial class AgcExports
             ItDrawIndexAuto or
             ItDrawIndexMultiAuto or
             ItDrawIndexOffset2 ||
+        op == ItMemSemaphore ||
         op == ItDmaData ||
         (op == ItNop && register == RDmaData && length >= 7) ||
         (op == ItNop && register == RFlip && length >= 6) ||
