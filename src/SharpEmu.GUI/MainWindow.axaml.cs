@@ -1096,6 +1096,7 @@ public partial class MainWindow : Window
         RunShutdownStep("console window", () => _consoleWindow?.Close());
         RunShutdownStep("emulator process", () => _emulator?.Dispose());
         RunShutdownStep("console mirror", () => _consoleMirror?.Dispose());
+        RunShutdownStep("pending console output", FlushAllPendingConsoleLines);
         RunShutdownStep("file log", DropFileLog);
     }
 
@@ -2564,6 +2565,7 @@ public partial class MainWindow : Window
     private void OnEmulatorExited(int exitCode)
     {
         FlushPendingConsoleLines();
+        FlushAllPendingConsoleLines();
         _isRunning = false;
         _isStopping = false;
         _emulator?.Dispose();
@@ -2759,12 +2761,8 @@ public partial class MainWindow : Window
         }
 
         var incoming = new List<LogLine>();
-        while (incoming.Count < MaxConsoleLinesPerFlush &&
-               _pendingLines.TryDequeue(out var pending))
-        {
-            WriteFileLog(pending.Line);
-            incoming.Add(new LogLine(pending.Line, BrushForLine(pending.Line)));
-        }
+        DrainPendingLogLines(_pendingLines, WriteFileLog,
+            line => incoming.Add(new LogLine(line, BrushForLine(line))), MaxConsoleLinesPerFlush);
 
         FlushFileLog();
 
@@ -2845,6 +2843,27 @@ public partial class MainWindow : Window
 
     // ---- Console-to-file mirroring ----
 
+    private void FlushAllPendingConsoleLines()
+    {
+        while (!_pendingLines.IsEmpty)
+        {
+            FlushPendingConsoleLines();
+        }
+    }
+
+    internal static void DrainPendingLogLines(
+        ConcurrentQueue<(string Line, bool IsError)> pendingLines,
+        Action<string> writeLine,
+        Action<string> displayLine,
+        int maxLines = int.MaxValue)
+    {
+        for (var count = 0; count < maxLines && pendingLines.TryDequeue(out var pending); count++)
+        {
+            writeLine(pending.Line);
+            displayLine(pending.Line);
+        }
+    }
+
     private void WriteFileLog(string text)
     {
         if (_fileLog is not { } writer)
@@ -2905,7 +2924,7 @@ public partial class MainWindow : Window
         {
             if (ReferenceEquals(_fileLog, writer))
             {
-                FlushPendingConsoleLines();
+                FlushAllPendingConsoleLines();
                 DropFileLog();
             }
         }, TimeSpan.FromMilliseconds(400));
