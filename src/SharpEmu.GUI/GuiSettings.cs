@@ -72,9 +72,6 @@ public sealed class GuiSettings
     /// <summary>Names of SHARPEMU_* switches set to "1" in the emulator's environment at launch.</summary>
     public List<string> EnvironmentToggles { get; set; } = new();
 
-    /// <summary>Internal render resolution scale (1.0 = native, 0.5 = half).</summary>
-    public double RenderResolutionScale { get; set; } = 1.0;
-
     /// <summary>
     /// Discord application ID used for Rich Presence; the default is the
     /// SharpEmu application. Override to rebrand what Discord shows as
@@ -130,10 +127,6 @@ public sealed class GuiSettings
         settings.DefaultProfile = NormalizeDefaultProfile(
             legacyProfile is { Length: 2 } ? legacyProfile[1] : settings.DefaultProfile);
         settings.DiscordClientId ??= "1525606762248540221";
-        if (settings.RenderResolutionScale <= 0 || settings.RenderResolutionScale > 2.0)
-        {
-            settings.RenderResolutionScale = 1.0;
-        }
         settings.LibraryLayout = NormalizeChoice(settings.LibraryLayout, "Carousel", "Grid");
         settings.WindowMode = NormalizeChoice(settings.WindowMode, "Windowed", "Borderless", "Exclusive");
         settings.Resolution = NormalizeResolution(settings.Resolution);
