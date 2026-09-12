@@ -70,6 +70,19 @@ public partial class MainWindow : Window
         LocalizedChoice.FromKey("Stretch", "Options.Scaling.Stretch"),
         LocalizedChoice.FromKey("Integer", "Options.Scaling.Integer"),
     ];
+    private readonly LocalizedChoice[] _overlayModeChoices =
+    [
+        LocalizedChoice.FromKey("Full", "Options.OverlayMode.Full"),
+        LocalizedChoice.FromKey("Minimal", "Options.OverlayMode.Minimal"),
+        LocalizedChoice.FromKey("TitleBar", "Options.OverlayMode.TitleBar"),
+    ];
+    private readonly LocalizedChoice[] _overlayCornerChoices =
+    [
+        LocalizedChoice.FromKey("TopLeft", "Options.OverlayCorner.TopLeft"),
+        LocalizedChoice.FromKey("TopRight", "Options.OverlayCorner.TopRight"),
+        LocalizedChoice.FromKey("BottomRight", "Options.OverlayCorner.BottomRight"),
+        LocalizedChoice.FromKey("BottomLeft", "Options.OverlayCorner.BottomLeft"),
+    ];
     private readonly LocalizedChoice[] _hdrModeChoices =
     [
         LocalizedChoice.FromKey("Auto", "Options.Hdr.Auto"),
@@ -262,6 +275,9 @@ public partial class MainWindow : Window
         ScalingModeBox.SelectionChanged += (_, _) => _settings.ScalingMode = SelectedComboText(ScalingModeBox, "Fit");
         VSyncToggle.IsCheckedChanged += (_, _) => _settings.VSync = VSyncToggle.IsChecked == true;
         HdrModeBox.SelectionChanged += (_, _) => _settings.HdrMode = SelectedComboText(HdrModeBox, "Auto");
+        OverlayEnabledToggle.IsCheckedChanged += (_, _) => _settings.OverlayEnabled = OverlayEnabledToggle.IsChecked == true;
+        OverlayModeBox.SelectionChanged += (_, _) => _settings.OverlayMode = SelectedComboText(OverlayModeBox, "Full");
+        OverlayCornerBox.SelectionChanged += (_, _) => _settings.OverlayCorner = SelectedComboText(OverlayCornerBox, "TopRight");
         UpdateButton.Click += async (_, _) => await OnUpdateButtonAsync();
         SelectLogFilePathButton.Click += async (_, _) => await SelectLogFilePathAsync();
         EnvBthidToggle.IsCheckedChanged += (_, _) =>
@@ -1173,6 +1189,8 @@ public partial class MainWindow : Window
         WindowModeBox.ItemsSource = _windowModeChoices;
         ScalingModeBox.ItemsSource = _scalingModeChoices;
         HdrModeBox.ItemsSource = _hdrModeChoices;
+        OverlayModeBox.ItemsSource = _overlayModeChoices;
+        OverlayCornerBox.ItemsSource = _overlayCornerChoices;
     }
 
     private void RefreshLocalizedChoices()
@@ -1182,6 +1200,8 @@ public partial class MainWindow : Window
         RefreshChoices(_windowModeChoices);
         RefreshChoices(_scalingModeChoices);
         RefreshChoices(_hdrModeChoices);
+        RefreshChoices(_overlayModeChoices);
+        RefreshChoices(_overlayCornerChoices);
     }
 
     private static void RefreshChoices(IEnumerable<LocalizedChoice> choices)
@@ -1230,6 +1250,9 @@ public partial class MainWindow : Window
         ScalingModeBox.SelectedIndex = ChoiceIndex(_settings.ScalingMode, "Fit", "Cover", "Stretch", "Integer");
         VSyncToggle.IsChecked = _settings.VSync;
         HdrModeBox.SelectedIndex = ChoiceIndex(_settings.HdrMode, "Auto", "On", "Off");
+        OverlayEnabledToggle.IsChecked = _settings.OverlayEnabled;
+        OverlayModeBox.SelectedIndex = ChoiceIndex(_settings.OverlayMode, "Full", "Minimal", "TitleBar");
+        OverlayCornerBox.SelectedIndex = ChoiceIndex(_settings.OverlayCorner, "TopLeft", "TopRight", "BottomRight", "BottomLeft");
         UpdateLogFilePathText();
     }
 
@@ -2605,6 +2628,9 @@ public partial class MainWindow : Window
         arguments.Add($"--scaling={launch.Settings.ScalingMode.ToLowerInvariant()}");
         arguments.Add($"--vsync={(launch.Settings.VSync ? "on" : "off")}");
         arguments.Add($"--hdr={launch.Settings.HdrMode.ToLowerInvariant()}");
+        arguments.Add($"--overlay={(launch.Settings.OverlayEnabled ? "on" : "off")}");
+        arguments.Add($"--overlay-mode={launch.Settings.OverlayMode.ToLowerInvariant()}");
+        arguments.Add($"--overlay-corner={launch.Settings.OverlayCorner.ToLowerInvariant()}");
 
         arguments.Add(launch.EbootPath);
         return arguments;
