@@ -119,7 +119,6 @@ public partial class MainWindow : Window
     private bool _addFolderInProgress;
     private bool _isLibraryGridLayout;
     private GameEntry? _lastSelectedGame;
-    private double _embeddedConsoleHeight = 240;
     private double _libraryRailRowHeight = 188;
     private double _libraryGridRowHeight = 216;
 
@@ -405,6 +404,7 @@ public partial class MainWindow : Window
         LibraryToolbar.IsVisible = index == 0;
         OptionsPageSurface.IsVisible = index == 1;
         OptionsPage.IsVisible = index == 1;
+        UpdateEmbeddedConsoleVisibility();
 
         if (index == 1)
         {
@@ -1062,6 +1062,7 @@ public partial class MainWindow : Window
     private void CompleteWindowClosing()
     {
         RunShutdownStep("library watcher", _libraryWatcher.Dispose);
+        RememberEmbeddedConsoleHeight();
         RunShutdownStep("settings", _settings.Save);
         RunShutdownStep("SDL gamepad", SdlLauncherGamepad.Shutdown);
         RunShutdownStep("title music", _sndPreview.Stop);
@@ -2923,16 +2924,15 @@ public partial class MainWindow : Window
 
     private void UpdateEmbeddedConsoleVisibility()
     {
-        var visible = ConsoleToggle.IsChecked == true && _consoleWindow is null;
+        var visible = ShouldShowEmbeddedConsole(
+            ConsoleToggle.IsChecked == true, _consoleWindow is not null, _activePageIndex, _isGameSettingsOpen);
         if (visible == ConsolePanel.IsVisible)
         {
             return;
         }
 
-        if (!visible && ConsolePanel.Bounds.Height >= 120)
-        {
-            _embeddedConsoleHeight = ConsolePanel.Bounds.Height;
-        }
+        if (!visible)
+            RememberEmbeddedConsoleHeight();
 
         ConsolePanel.IsVisible = visible;
         ConsoleSplitter.IsVisible = visible;
@@ -2941,8 +2941,18 @@ public partial class MainWindow : Window
             : new GridLength(0);
         MainContent.RowDefinitions[3].MinHeight = visible ? 120 : 0;
         MainContent.RowDefinitions[3].Height = visible
-            ? new GridLength(Math.Min(_embeddedConsoleHeight, MaximumEmbeddedConsoleHeight()))
+            ? new GridLength(Math.Min(_settings.EmbeddedConsoleHeight, MaximumEmbeddedConsoleHeight()))
             : new GridLength(0);
+    }
+
+    internal static bool ShouldShowEmbeddedConsole(
+        bool requested, bool detached, int activePageIndex, bool gameOptionsOpen) =>
+        requested && !detached && activePageIndex == 0 && !gameOptionsOpen;
+
+    private void RememberEmbeddedConsoleHeight()
+    {
+        if (ConsolePanel.IsVisible && ConsolePanel.Bounds.Height >= 120)
+            _settings.EmbeddedConsoleHeight = ConsolePanel.Bounds.Height;
     }
 
     private void ClampEmbeddedConsoleHeight()
@@ -2988,12 +2998,16 @@ public partial class MainWindow : Window
         _consoleWindow = new ConsoleWindow(
             _consoleLines,
             () => { _consoleLines.Clear(); _allConsoleLines.Clear(); },
-            AutoScrollCheck.IsChecked == true);
+            AutoScrollCheck.IsChecked == true,
+            _settings);
         _consoleWindow.Closed += (_, _) =>
         {
             _consoleWindow = null;
-            ConsoleToggle.IsChecked = true;
-            UpdateEmbeddedConsoleVisibility();
+            if (!_isClosing)
+            {
+                ConsoleToggle.IsChecked = true;
+                UpdateEmbeddedConsoleVisibility();
+            }
         };
         _consoleWindow.Show(this);
     }
