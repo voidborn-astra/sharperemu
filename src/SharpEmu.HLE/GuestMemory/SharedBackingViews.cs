@@ -25,6 +25,7 @@ public sealed unsafe partial class SharedBackingViews : IDisposable
     private int _activeCopies;
     private int _copyWaiters;
     private int _mappingWaiters;
+    private int _copyAccessBlocked;
     private volatile bool _disposed;
 
     // Guest command writes and their reads by the render thread reach TryWriteBacking and
@@ -660,7 +661,14 @@ public sealed unsafe partial class SharedBackingViews : IDisposable
             return false;
         }
 
+        if (Volatile.Read(ref _copyAccessBlocked) != 0) return false;
         Interlocked.Increment(ref _activeAccesses);
+        // Register before the gate check so a reservation must wait for an admitted access.
+        if (Volatile.Read(ref _copyAccessBlocked) != 0)
+        {
+            Interlocked.Decrement(ref _activeAccesses);
+            return false;
+        }
         var snapshot = Volatile.Read(ref _snapshot);
         var low = 0;
         var high = snapshot.Length - 1;
