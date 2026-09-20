@@ -4,6 +4,7 @@
 namespace SharpEmu.Libs.VideoOut;
 
 using System.Text;
+using System.Diagnostics;
 using SharpEmu.Libs.Gpu.Buffers;
 using SharpEmu.Libs.Gpu.Pipelines;
 using SharpEmu.Libs.Gpu.Rendering;
@@ -1149,6 +1150,8 @@ internal static unsafe partial class VulkanVideoPresenter
             }
         }
 
+        private PipelineCacheWriter? _pipelineCacheWriter;
+
         private void SavePipelineCache(bool force)
         {
             if (_pipelineCache.Handle == 0 || string.IsNullOrWhiteSpace(_pipelineCachePath))
@@ -1161,6 +1164,11 @@ internal static unsafe partial class VulkanVideoPresenter
                 return;
             }
 
+            var profileEnabled = RenderPhaseProfile.Enabled;
+            var saveStarted = profileEnabled ? Stopwatch.GetTimestamp() : 0;
+            var queued = false;
+            var savedBytes = 0;
+            _lastPipelineCacheSaveTick = Environment.TickCount64;
             try
             {
                 nuint size = 0;
@@ -1198,25 +1206,51 @@ internal static unsafe partial class VulkanVideoPresenter
                     Array.Resize(ref data, checked((int)size));
                 }
 
-                var directory = Path.GetDirectoryName(_pipelineCachePath);
-                if (!string.IsNullOrWhiteSpace(directory))
+                savedBytes = data.Length;
+                if (_pipelineCacheWriter is null)
                 {
-                    Directory.CreateDirectory(directory);
+                    var path = _pipelineCachePath;
+                    var signature = DriverCacheSignature();
+                    _pipelineCacheWriter = new PipelineCacheWriter(
+                        snapshot => WritePipelineCacheSnapshot(path, signature, snapshot),
+                        exception => Console.Error.WriteLine($"[LOADER][WARN] Vulkan pipeline cache save failed: {exception.Message}"));
                 }
-
-                var temporaryPath = _pipelineCachePath + $".{Environment.ProcessId}.tmp";
-                File.WriteAllBytes(temporaryPath, PipelineCacheSignature.Wrap(DriverCacheSignature(), data));
-                File.Move(temporaryPath, _pipelineCachePath, overwrite: true);
+                _pipelineCacheWriter.Enqueue(data);
+                queued = true;
                 _pipelineCacheDirty = false;
-                _lastPipelineCacheSaveTick = Environment.TickCount64;
-                Console.Error.WriteLine(
-                    $"[LOADER][INFO] Vulkan pipeline cache saved: path={_pipelineCachePath} bytes={data.Length}");
             }
             catch (Exception exception)
             {
                 Console.Error.WriteLine(
                     $"[LOADER][WARN] Vulkan pipeline cache save failed: {exception.Message}");
             }
+            finally
+            {
+                if (profileEnabled)
+                {
+                    Console.Error.WriteLine(FormattableString.Invariant(
+                        $"[GPU][PERF] pipeline_cache_export forced={force} queued={queued} bytes={savedBytes} render_thread_ms={Stopwatch.GetElapsedTime(saveStarted).TotalMilliseconds:F3}"));
+                }
+            }
+        }
+
+        private static void WritePipelineCacheSnapshot(string path, string signature, byte[] data)
+        {
+            var profileEnabled = RenderPhaseProfile.Enabled;
+            var started = profileEnabled ? Stopwatch.GetTimestamp() : 0;
+            var directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+            var temporaryPath = path + $".{Environment.ProcessId}.tmp";
+            var fileData = PipelineCacheSignature.Wrap(signature, data);
+            var prepared = profileEnabled ? Stopwatch.GetTimestamp() : 0;
+            File.WriteAllBytes(temporaryPath, fileData);
+            var written = profileEnabled ? Stopwatch.GetTimestamp() : 0;
+            File.Move(temporaryPath, path, overwrite: true);
+            var finished = profileEnabled ? Stopwatch.GetTimestamp() : 0;
+            Console.Error.WriteLine($"[LOADER][INFO] Vulkan pipeline cache saved: path={path} bytes={data.Length}");
+            if (profileEnabled)
+                Console.Error.WriteLine(FormattableString.Invariant(
+                    $"[GPU][PERF] pipeline_cache_write background=True bytes={data.Length} prepare_ms={Stopwatch.GetElapsedTime(started, prepared).TotalMilliseconds:F3} write_ms={Stopwatch.GetElapsedTime(prepared, written).TotalMilliseconds:F3} replace_ms={Stopwatch.GetElapsedTime(written, finished).TotalMilliseconds:F3} total_ms={Stopwatch.GetElapsedTime(started, finished).TotalMilliseconds:F3}"));
         }
 
         private void CreateCommandResources()

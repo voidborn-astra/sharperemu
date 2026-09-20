@@ -27,6 +27,7 @@ internal static unsafe partial class VulkanVideoPresenter
             }
 
             SavePipelineCache(force: true);
+            _pipelineCacheWriter?.Dispose();
             DrainFrameSlots();
             CollectCompletedGuestSubmissions(waitForOldest: false);
             DestroyRenderPipelines();
