@@ -15,7 +15,7 @@ internal static class GuestRedZonePatcher
 {
     private const int GuestRedZoneBytes = 128;
     private const int MinimumJumpBytes = 5;
-    private const int EstimatedTrampolineBytesPerSite = 48;
+    private const int MaximumGroupedBytes = 128;
     private const ulong PageSize = 0x1000;
     private const ulong AllocationAlignment = 0x10000;
     private const ulong MaximumRelativeJumpDistance = 0x7FFF_FFFF;
@@ -62,10 +62,14 @@ internal static class GuestRedZonePatcher
             return scan;
         }
 
-        var requiredBytes = AlignUp(
-            checked((ulong)sites.Count * (splitVectorStores ? 80UL : EstimatedTrampolineBytesPerSite) +
-                (ulong)scan.ShaInstructionCount * ShaInstructionRewrite.MaximumExpansionBytes + PageSize),
-            PageSize);
+        var requiredBytes = PageSize;
+        foreach (var site in sites)
+        {
+            // Reserve relocation expansion, stack guards, and alignment for each span.
+            requiredBytes = checked(requiredBytes + 32UL + (ulong)site.Instructions.Count * (splitVectorStores ? 64UL : 32UL));
+        }
+        requiredBytes = AlignUp(checked(requiredBytes +
+            (ulong)scan.ShaInstructionCount * ShaInstructionRewrite.MaximumExpansionBytes), PageSize);
         if (!TryAllocateTrampolines(
                 physicalMemory,
                 imageBase,
@@ -125,6 +129,8 @@ internal static class GuestRedZonePatcher
         var instructionCount = 0;
         var vectorStoreCount = 0;
         var shaInstructionCount = 0;
+        var branchTargets = new HashSet<ulong>();
+        var candidateFunctions = new List<(List<DecodedInstruction> Instructions, bool UsesRedZone)>();
 
         foreach (var header in programHeaders)
         {
@@ -173,6 +179,7 @@ internal static class GuestRedZonePatcher
 
                 functionCount++;
                 instructionCount += decoded.Count;
+                CollectBranchTargets(decoded, branchTargets);
                 var usesRedZone = protectRedZone && decoded.Any(static entry => UsesRedZone(entry.Instruction));
                 if (!usesRedZone && !splitVectorStores && !rewriteSha)
                 {
@@ -183,30 +190,37 @@ internal static class GuestRedZonePatcher
                 {
                     redZoneFunctionCount++;
                 }
-                var branchTargets = CollectBranchTargets(decoded);
-                for (var instructionIndex = 0; instructionIndex < decoded.Count; instructionIndex++)
-                {
-                    var instruction = decoded[instructionIndex].Instruction;
-                    var isShaSite = rewriteSha && ShaInstructionRewrite.CanRewrite(instruction);
-                    if ((!isShaSite &&
-                         ((!usesRedZone && !(splitVectorStores && RosettaVectorStorePatch.RequiresStoreSplit(instruction))) ||
-                          !IsFaultableGuestMemoryInstruction(instruction))) ||
-                        !TryBuildPatchSpan(decoded, instructionIndex, branchTargets, out var span))
-                    {
-                        continue;
-                    }
+                candidateFunctions.Add((decoded, usesRedZone));
+            }
+        }
 
-                    sites.Add(span);
-                    if (splitVectorStores)
-                    {
-                        vectorStoreCount += span.Instructions.Count(static instruction => RosettaVectorStorePatch.RequiresStoreSplit(instruction));
-                    }
-                    if (rewriteSha)
-                    {
-                        shaInstructionCount += span.Instructions.Count(static instruction => ShaInstructionRewrite.CanRewrite(instruction));
-                    }
-                    instructionIndex += span.Instructions.Count - 1;
+        // Collect incoming branches from all functions and segments before replacing bytes.
+        foreach (var (decoded, usesRedZone) in candidateFunctions)
+        {
+            // An unresolved indirect jump can enter the middle of a span.
+            var groupInstructions = !decoded.Any(static entry => entry.Instruction.FlowControl == FlowControl.IndirectBranch);
+            for (var instructionIndex = 0; instructionIndex < decoded.Count; instructionIndex++)
+            {
+                var instruction = decoded[instructionIndex].Instruction;
+                var isShaSite = rewriteSha && ShaInstructionRewrite.CanRewrite(instruction);
+                if ((!isShaSite &&
+                     ((!usesRedZone && !(splitVectorStores && RosettaVectorStorePatch.RequiresStoreSplit(instruction))) ||
+                      !IsFaultableGuestMemoryInstruction(instruction))) ||
+                    !TryBuildPatchSpan(decoded, instructionIndex, branchTargets, groupInstructions, out var span))
+                {
+                    continue;
                 }
+
+                sites.Add(span);
+                if (splitVectorStores)
+                {
+                    vectorStoreCount += span.Instructions.Count(static instruction => RosettaVectorStorePatch.RequiresStoreSplit(instruction));
+                }
+                if (rewriteSha)
+                {
+                    shaInstructionCount += span.Instructions.Count(static instruction => ShaInstructionRewrite.CanRewrite(instruction));
+                }
+                instructionIndex += span.Instructions.Count - 1;
             }
         }
 
@@ -248,9 +262,8 @@ internal static class GuestRedZonePatcher
         return decoded;
     }
 
-    private static HashSet<ulong> CollectBranchTargets(IReadOnlyList<DecodedInstruction> instructions)
+    private static void CollectBranchTargets(IReadOnlyList<DecodedInstruction> instructions, HashSet<ulong> targets)
     {
-        var targets = new HashSet<ulong>();
         foreach (var decoded in instructions)
         {
             var instruction = decoded.Instruction;
@@ -271,30 +284,34 @@ internal static class GuestRedZonePatcher
             }
         }
 
-        return targets;
     }
 
     private static bool TryBuildPatchSpan(
         IReadOnlyList<DecodedInstruction> decoded,
         int startIndex,
         IReadOnlySet<ulong> branchTargets,
+        bool groupInstructions,
         out PatchSite site)
     {
         var instructions = new List<Instruction>(3);
         var byteLength = 0;
-        for (var index = startIndex; index < decoded.Count && byteLength < MinimumJumpBytes; index++)
+        for (var index = startIndex; index < decoded.Count; index++)
         {
             var instruction = decoded[index].Instruction;
             if (instruction.FlowControl != FlowControl.Next ||
                 (index != startIndex && branchTargets.Contains(instruction.IP)) ||
-                TouchesStackPointer(instruction))
+                TouchesStackPointer(instruction) ||
+                byteLength + instruction.Length > MaximumGroupedBytes)
             {
-                site = default;
-                return false;
+                break;
             }
 
             instructions.Add(instruction);
             byteLength += instruction.Length;
+            if (!groupInstructions && byteLength >= MinimumJumpBytes)
+            {
+                break;
+            }
         }
 
         if (byteLength < MinimumJumpBytes)
@@ -330,7 +347,7 @@ internal static class GuestRedZonePatcher
 
     private static bool TouchesStackPointer(in Instruction instruction)
     {
-        if (UsesStackMemory(instruction) ||
+        if (UsesStackMemory(instruction) || instruction.IsStackInstruction ||
             instruction.Mnemonic is
                 Mnemonic.Push or
                 Mnemonic.Pop or
