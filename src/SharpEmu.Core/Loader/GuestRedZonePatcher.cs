@@ -215,8 +215,11 @@ internal static class GuestRedZonePatcher
                 functionCount++;
                 instructionCount += decoded.Count;
                 CollectBranchTargets(decoded, branchTargets);
-                var usesRedZone = protectRedZone && decoded.Any(static entry => UsesRedZone(entry.Instruction));
-
+                var usesRedZone = protectRedZone &&
+                    (decoded.Any(static entry => UsesRedZone(entry.Instruction)) ||
+                     (decoded.Any(static entry => entry.Instruction.MemoryBase == Register.RBP &&
+                         unchecked((long)entry.Instruction.MemoryDisplacement64) < 0) &&
+                      GuestStackFrameAnalysis.UsesFrameRedZone(decoded.Select(static entry => entry.Instruction).ToArray())));
                 if (!usesRedZone && !splitVectorStores && !rewriteSha)
                 {
                     continue;
