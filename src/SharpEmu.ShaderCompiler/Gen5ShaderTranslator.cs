@@ -33,6 +33,13 @@ public static partial class Gen5ShaderTranslator
         ulong ContinuationAddress,
         ulong ContinuationHeaderAddress);
 
+    private static FusedProgramRegistry FusedProgramsFor(ICpuMemory memory)
+    {
+        object identity = memory;
+        while (identity is ICpuMemoryWrapper wrapper) identity = wrapper.Inner;
+        return _fusedProgramsByMemory.GetValue(identity, static _ => new FusedProgramRegistry());
+    }
+
     /// <summary>
     /// Records the two code objects that AGC joins into one hardware shader.
     /// The entry code transfers control to the continuation with S_SETPC_B64.
@@ -52,7 +59,7 @@ public static partial class Gen5ShaderTranslator
             return;
         }
 
-        var registry = _fusedProgramsByMemory.GetValue(ctx.Memory, static _ => new FusedProgramRegistry());
+        var registry = FusedProgramsFor(ctx.Memory);
         lock (registry.Gate)
         {
             registry.FusedPrograms[entryAddress] = new FusedShaderParts(
@@ -69,7 +76,7 @@ public static partial class Gen5ShaderTranslator
         out ulong continuationAddress,
         out ulong continuationHeaderAddress)
     {
-        var registry = _fusedProgramsByMemory.GetValue(ctx.Memory, static _ => new FusedProgramRegistry());
+        var registry = FusedProgramsFor(ctx.Memory);
         FusedShaderParts? parts;
         lock (registry.Gate)
         {
@@ -107,7 +114,7 @@ public static partial class Gen5ShaderTranslator
         out string error)
     {
         ValidateDppControlVectors();
-        var registry = _fusedProgramsByMemory.GetValue(ctx.Memory, static _ => new FusedProgramRegistry());
+        var registry = FusedProgramsFor(ctx.Memory);
         FusedShaderParts? fusedParts;
         lock (registry.Gate)
         {
