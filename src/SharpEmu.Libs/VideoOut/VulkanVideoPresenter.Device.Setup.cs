@@ -602,6 +602,7 @@ internal static unsafe partial class VulkanVideoPresenter
                 (subgroupSizeControl.RequiredSubgroupSizeStages & ShaderStageFlags.ComputeBit) != 0;
             _maxComputeWorkgroupSubgroups = subgroupSizeControl.MaxComputeWorkgroupSubgroups;
             _maxPushDescriptors = pushDescriptorProperties.MaxPushDescriptors;
+            _shaderDescriptorLimits = properties.Limits;
             _noAttachmentSampleCounts = properties.Limits.FramebufferNoAttachmentsSampleCounts;
             _maxComputeWorkGroupCountX = properties.Limits.MaxComputeWorkGroupCount[0];
             _maxComputeWorkGroupCountY = properties.Limits.MaxComputeWorkGroupCount[1];
