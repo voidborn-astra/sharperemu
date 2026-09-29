@@ -2576,6 +2576,8 @@ public static partial class Gen5SpirvTranslator
                 var immediate = unchecked((uint)(short)(instruction.Words[0] & 0xFFFF));
                 if (instruction.Opcode.StartsWith("SCmpk", StringComparison.Ordinal))
                 {
+                    if (instruction.Opcode.EndsWith("U32", StringComparison.Ordinal))
+                        immediate &= 0xFFFF;
                     return TryEmitScalarCompareK(instruction, destination, immediate, out error);
                 }
 
