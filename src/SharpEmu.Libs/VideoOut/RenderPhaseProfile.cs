@@ -118,6 +118,8 @@ internal static class RenderPhaseProfile
         BufferResources,
         DescriptorSetup,
         PipelineSetup,
+        GraphicsPipelineDriver,
+        ComputePipelineDriver,
         DrawRecording,
         ResourceDestroy,
         ImageVersions,
