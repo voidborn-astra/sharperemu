@@ -1154,6 +1154,7 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 		PrewarmNativeGuestWorkers(Math.Max(NativeWorkerMaxConcurrent, 4));
 	}
 
+    private NativeFunctionTrace? _nativeFunctionTrace;
 	public bool TryExecute(CpuContext context, ulong entryPoint, Generation generation, IReadOnlyDictionary<ulong, string> importStubs, IReadOnlyDictionary<string, ulong> runtimeSymbols, CpuExecutionOptions executionOptions, out OrbisGen2Result result)
 	{
 		Console.Error.WriteLine("[LOADER][INFO] === Execute START ===");
@@ -1251,6 +1252,7 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 			}
 			CreateTlsHandler();
 			PatchTlsPatterns();
+            _nativeFunctionTrace ??= NativeFunctionTrace.FromEnvironment();
 			return ExecuteEntry(context, entryPoint, out result);
 		}
 		catch (Exception ex)
@@ -7430,6 +7432,8 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 
 		WriteGuestFlowTraces();
 		ClearGuestThreads();
+        _nativeFunctionTrace?.Dispose();
+        _nativeFunctionTrace = null;
 		if (ReferenceEquals(_posixSignalBackend, this))
 		{
 			// The signal handlers stay installed (they chain to the previous
