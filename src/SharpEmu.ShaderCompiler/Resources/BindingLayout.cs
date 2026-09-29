@@ -450,13 +450,13 @@ public sealed class BindingLayout : IEquatable<BindingLayout>
             }
         }
 
-        if (instruction.Opcode is "SBitset0B32" or "SBitset1B32")
+        if (instruction.Opcode is "SBitset0B32" or "SBitset1B32" or "SCmovB64")
         {
             foreach (var destination in instruction.Destinations)
             {
                 if (destination.Kind == Gen5OperandKind.ScalarRegister)
                 {
-                    Use(destination.Value, 1);
+                    Use(destination.Value, instruction.Opcode == "SCmovB64" ? 2u : 1u);
                 }
             }
         }

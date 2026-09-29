@@ -604,6 +604,7 @@ public static partial class Gen5ShaderTranslator
         {
             0x03 => "SMovB32",
             0x04 => "SMovB64",
+            0x06 => "SCmovB64",
             0x07 => "SNotB32",
             0x08 => "SNotB64",
             0x09 => "SWqmB32",
