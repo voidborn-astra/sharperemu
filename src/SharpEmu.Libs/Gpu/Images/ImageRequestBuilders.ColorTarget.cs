@@ -291,9 +291,14 @@ public static partial class ImageRequestBuilders
 
         var viewExtent = new Extent2D(Math.Max(width >> (int)words.MipLevel, 1), Math.Max(height >> (int)words.MipLevel, 1));
         var viewDepth = Math.Max(depth >> (int)words.MipLevel, 1);
-        if (volume && (view.BaseLayer >= viewDepth || view.LayerCount > viewDepth - view.BaseLayer))
+        if (volume && view.BaseLayer >= viewDepth)
         {
             throw SubmissionScheduler.Fatal($"The 3D render-target view exceeds the mip depth: base={view.BaseLayer} count={view.LayerCount} depth={viewDepth} mip={words.MipLevel}.");
+        }
+        if (volume)
+        {
+            // The slice window does not increase the storage depth of a volume.
+            view = view with { LayerCount = Math.Min(view.LayerCount, viewDepth - view.BaseLayer) };
         }
 
         var description = ImageDescription.Create();
