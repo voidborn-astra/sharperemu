@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 using SharpEmu.Libs.Gpu.Buffers;
+using SharpEmu.Libs.Gpu.Rendering;
 using SharpEmu.Libs.Gpu.Scheduling;
 using SharpEmu.Libs.Gpu.Vulkan;
 using Silk.NET.Vulkan;
@@ -392,6 +393,7 @@ public sealed unsafe partial class GuestImageCache
         var upload = image.IsBufferModified || image.IsCpuDirty;
         if (upload)
         {
+            if (MeshDrawTrace.Enabled) MeshDrawTrace.Range("image-upload", image.Description.Data.Address, image.Description.Data.Size, $"cpuDirty={image.IsCpuDirty} bufferDirty={image.IsBufferModified}");
             var reason = image.IsBufferModified
                 ? (image.IsCpuDirty ? "buffer-and-cpu-dirty" : "buffer-dirty")
                 : (image.IsMaybeCpuDirty ? "maybe-cpu-dirty" : "cpu-dirty");
@@ -552,6 +554,7 @@ public sealed unsafe partial class GuestImageCache
 
     private void DownloadToBuffer(CachedImage image, GpuBuffer destination, ulong destinationOffset, ulong destinationSize, ImageDownloadPlan plan)
     {
+        if (MeshDrawTrace.Enabled) MeshDrawTrace.Range("image-to-buffer", image.Description.Data.Address, image.Description.Data.Size, $"destinationOffset=0x{destinationOffset:X} destinationSize=0x{destinationSize:X}");
         if (!plan.Valid)
         {
             throw SubmissionScheduler.Fatal($"The image download plan is invalid: address=0x{image.Description.Data.Address:X16} size=0x{image.Description.Data.Size:X}.");
@@ -738,6 +741,7 @@ public sealed unsafe partial class GuestImageCache
 
         var range = image.Description.Data;
         var download = _bufferCache.GetUtilityBuffer(GpuBufferUsage.Download);
+        if (MeshDrawTrace.Enabled) MeshDrawTrace.Range("image-to-guest-planned", range.Address, range.Size, "");
         if (!download.TryMap(range.Size, out var offset, Math.Max(image.Description.BytesPerBlock, 4u)))
         {
             throw SubmissionScheduler.Fatal($"The reusable download ring cannot map the image: address=0x{range.Address:X16} size=0x{range.Size:X}.");
@@ -772,6 +776,7 @@ public sealed unsafe partial class GuestImageCache
             {
                 throw SubmissionScheduler.Fatal($"The image readback could not be written to guest memory: address=0x{range.Address:X16} size=0x{range.Size:X}.");
             }
+            if (MeshDrawTrace.Enabled) MeshDrawTrace.Range("image-published", range.Address, range.Size, "completion-callback=true");
         });
         return true;
     }
