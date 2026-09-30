@@ -733,11 +733,6 @@ public sealed partial class ResourceTracker
             }
         }
 
-        if (_info.Images.Count >= ShaderResourceInfo.MaxImages)
-        {
-            return DescriptorConstants.NoIndex;
-        }
-
         var added = new ImageResource
         {
             Source = source,
@@ -774,11 +769,6 @@ public sealed partial class ResourceTracker
             }
         }
 
-        if (_info.Samplers.Count >= ShaderResourceInfo.MaxSamplers)
-        {
-            return DescriptorConstants.NoIndex;
-        }
-
         _info.Samplers.Add(new SamplerResource { Source = source, FirstUsePc = pc });
         return (uint)(_info.Samplers.Count - 1);
     }
@@ -792,11 +782,6 @@ public sealed partial class ResourceTracker
                 pair.FirstUsePc = Math.Min(pair.FirstUsePc, pc);
                 return;
             }
-        }
-
-        if (_info.SampledPairs.Count >= ShaderResourceInfo.MaxSampledPairs)
-        {
-            throw Failure(pc, "sampled image/sampler pair limit exceeded");
         }
 
         _info.SampledPairs.Add(new SampledImagePair { Image = image, Sampler = sampler, FirstUsePc = pc });
