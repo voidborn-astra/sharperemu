@@ -87,6 +87,11 @@ internal static unsafe partial class VulkanVideoPresenter
         bool IShaderPipelineHost.ExecGuardElisionEnabled => _physicalDeviceVendorId != NvidiaVendorId;
         bool IShaderPipelineHost.PerVertexPixelInputsSupported => _supportsPerVertexPixelInputs;
 
+        bool IShaderPipelineHost.MeshShadersSupported => _supportsMeshShader;
+
+        MeshShaderLimits IShaderPipelineHost.MeshLimits => _meshShaderLimits;
+        uint IShaderPipelineHost.MeshSubgroupSize => checked((uint)Volatile.Read(ref _nativeSubgroupSize));
+
         RenderHostLimits IShaderPipelineHost.Limits => _renderHostLimits;
 
         SampleCountFlags IShaderPipelineHost.NoAttachmentSampleCounts => _noAttachmentSampleCounts;
