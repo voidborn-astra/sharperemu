@@ -185,6 +185,7 @@ public static partial class Gen5SpirvTranslator
         private uint _vertexIndexInput;
         private uint _instanceIndexInput;
         private uint _fragCoordInput;
+        private uint _fragmentLayerInput;
         private uint _localInvocationIdInput;
         private uint _localInvocationIndexInput;
         private uint _workGroupIdInput;
@@ -898,6 +899,16 @@ public static partial class Gen5SpirvTranslator
                     (uint)SpirvBuiltIn.FragCoord);
                 _interfaces.Add(_fragCoordInput);
 
+                if ((_pixelInputAddress & _pixelInputEnable & (1u << 13)) != 0)
+                {
+                    _module.AddCapability(SpirvCapability.ShaderLayer);
+                    _fragmentLayerInput = _module.AddGlobalVariable(
+                        _module.TypePointer(SpirvStorageClass.Input, _uintType), SpirvStorageClass.Input);
+                    _module.AddDecoration(_fragmentLayerInput, SpirvDecoration.BuiltIn, (uint)SpirvBuiltIn.Layer);
+                    _module.AddDecoration(_fragmentLayerInput, SpirvDecoration.Flat);
+                    _interfaces.Add(_fragmentLayerInput);
+                }
+
                 var declaredPixelOutputs =
                     Environment.GetEnvironmentVariable(
                         "SHARPEMU_FORCE_TITLE_SINGLE_MRT") == "1" &&
@@ -1199,10 +1210,14 @@ public static partial class Gen5SpirvTranslator
             EmitPixelPositionInput(10, 2, fragCoord, ref vgpr); // POS_Z_FLOAT
             EmitPixelPositionInput(11, 3, fragCoord, ref vgpr); // POS_W_FLOAT
 
-            // FRONT_FACE, ANCILLARY, SAMPLE_COVERAGE and POS_FIXED_PT follow
-            // position inputs. Reserve their compact slots until their SPIR-V
-            // builtins are needed by a guest shader.
             AdvancePixelInput(12, 1, ref vgpr);
+            if (_fragmentLayerInput != 0)
+            {
+                // ANCILLARY stores the render-target layer in bits 16 through 26.
+                var layer = BitwiseAnd(Load(_uintType, _fragmentLayerInput), UInt(0x7ff));
+                StoreV(vgpr, _module.AddInstruction(SpirvOp.ShiftLeftLogical, _uintType, layer, UInt(16)),
+                    guardWithExec: false);
+            }
             AdvancePixelInput(13, 1, ref vgpr);
             AdvancePixelInput(14, 1, ref vgpr);
             AdvancePixelInput(15, 1, ref vgpr);
