@@ -167,7 +167,7 @@ public sealed partial class RenderExecutor
         _host.SetDebugInformation(draw.Operation, submitId, phase, draw.Count, 0, draw.InstanceCount, draw.FirstInstance);
 
     // Binds everything the draw needs inside one preparation scope, then records it.
-    private void RecordDraw(
+    private string RecordDraw(
         ulong submitId,
         RegisterBanks banks,
         in DrawCall draw,
@@ -207,7 +207,7 @@ public sealed partial class RenderExecutor
                     "The draw was not executed. Images and FPS can be incorrect. Set SHARPEMU_STRICT_COMPUTE=1 to stop on this failure.");
             }
 
-            return;
+            return "resource-rejected";
         }
         var vertexProgram = vertexInput.Stage.Program ?? throw _host.Fatal("The vertex stage has no program.");
         var pixelProgram = pixelBindings is null ? null : pixelInput.Stage.Program ?? throw _host.Fatal("The pixel stage has no program.");
@@ -319,6 +319,8 @@ public sealed partial class RenderExecutor
         {
             SetDrawDebugPhase(submitId, in draw, 0x700);
         }
+
+        return "recorded";
     }
 
     private const ulong IndexedIndirectArgumentsSize = 20;
