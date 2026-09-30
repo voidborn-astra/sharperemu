@@ -117,6 +117,7 @@ public sealed partial class GuestImageCache
 
         if (found.Kind == SurfaceMetadataKind.Dcc)
         {
+            if (found.NativeColorClear) return false;
             IncludeMetadataWriteRange(address, size);
             found.ClearMask = dccClearMask;
             found.FillValue = fillValue;

@@ -367,6 +367,7 @@ public sealed unsafe partial class GuestImageCache : IGuestImageCache, IGuestIma
                 throw SubmissionScheduler.Fatal($"A color target reuses metadata that is not DCC: address=0x{address:X16} kind={metadata.Kind}.");
             }
             metadata.RangeSize = Math.Max(metadata.RangeSize, request.Description.Metadata.Range.Size);
+            metadata.NativeColorClear = request.Description.Metadata.NativeColorClear;
             image.MetadataRegistration = metadata;
         }
 
