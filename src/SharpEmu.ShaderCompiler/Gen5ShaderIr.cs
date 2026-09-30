@@ -335,6 +335,7 @@ public sealed record Gen5ShaderProgram(
     ulong Address,
     IReadOnlyList<Gen5ShaderInstruction> Instructions)
 {
+    public IReadOnlySet<uint> FunctionBufferAccesses { get; init; } = new HashSet<uint>();
     public ulong ContinuationAddress { get; init; }
 
     public uint ContinuationStartPc { get; init; }
