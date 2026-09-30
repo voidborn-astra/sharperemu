@@ -71,6 +71,11 @@ public sealed class Gen5ScalarImmediateCompareTests
                 constants[words[offset + 2]] = value;
             else if (opcode == comparisonOpcode)
                 comparisons[words[offset + 2]] = words[offset + 4];
+            else if (opcode == SpirvOp.Select &&
+                comparisons.TryGetValue(words[offset + 3], out var selectedOperand) &&
+                constants.TryGetValue(words[offset + 4], out var whenTrue) && whenTrue == 1 &&
+                constants.TryGetValue(words[offset + 5], out var whenFalse) && whenFalse == 0)
+                comparisons[words[offset + 2]] = selectedOperand;
             else if (opcode == SpirvOp.Store && comparisons.TryGetValue(words[offset + 2], out var operand))
                 comparisonOperand = operand;
         }
