@@ -112,6 +112,8 @@ public sealed partial class GuestImageCache
             _surfaceMetadata.TryGetValue(image.Description.Metadata.Range.Address, out var registeredMetadata) &&
             ReferenceEquals(registeredMetadata, image.MetadataRegistration))
         {
+            RecordMetadataEvent("remove-image-metadata", image.Description.Metadata.Range.Address,
+                image.Description.Metadata.Range.Size);
             _surfaceMetadata.Remove(image.Description.Metadata.Range.Address);
         }
 
@@ -129,6 +131,7 @@ public sealed partial class GuestImageCache
     private void ReleaseImage(ResourceSlotIdentifier imageIdentifier)
     {
         var image = _slots[imageIdentifier];
+        TraceVolumeState("release", image, ImageRequest.Refresh(image.Description, ImageRole.Texture));
         if (image.IsGpuModified)
         {
             image.ClearGpuModified();
@@ -425,6 +428,9 @@ public sealed partial class GuestImageCache
     // or makes the image maybe dirty. Returns whether any image shares a page with the range.
     private bool InvalidateAliases(ulong address, ulong size)
     {
+        RecordResourceHistory("cpu-write-notification", address, size);
+        if (ImageClearTrace.Enabled)
+            _metadataHistory.RecordRange(CreateMetadataEvent("cpu-write-notification", address, size, guestCpuWrite: true));
         InvalidateMetadataForCpuWrite(address, size);
         var pageBegin = address & ~(TrackerLayout.PageBytes - 1);
         var pageEnd = (address + size + TrackerLayout.PageBytes - 1) & ~(TrackerLayout.PageBytes - 1);
@@ -472,6 +478,9 @@ public sealed partial class GuestImageCache
         }
 
         using var held = _lock.Hold();
+        if (ImageClearTrace.Enabled)
+            _metadataHistory.RecordRange(CreateMetadataEvent("gpu-write-notification", address, size));
+        RecordResourceHistory("gpu-buffer-write-notification", address, size);
         foreach (var imageIdentifier in FindImagesInRange(address, size, pageOverlap: true))
         {
             var image = _slots[imageIdentifier];
@@ -498,6 +507,7 @@ public sealed partial class GuestImageCache
         }
 
         using var held = _lock.Hold();
+        RecordResourceHistory("gpu-buffer-write-notification", address, size);
         foreach (var imageIdentifier in FindImagesInRange(address, size, pageOverlap: true))
         {
             var image = _slots[imageIdentifier];
@@ -563,6 +573,9 @@ public sealed partial class GuestImageCache
         }
 
         using var held = _lock.Hold();
+        if (ImageClearTrace.Enabled)
+            _metadataHistory.RecordRange(CreateMetadataEvent("unmap", address, size));
+        RecordResourceHistory("unmap", address, size);
         var end = address + size;
         var stale = new List<ulong>();
         foreach (var metadataAddress in _surfaceMetadata.Keys)
