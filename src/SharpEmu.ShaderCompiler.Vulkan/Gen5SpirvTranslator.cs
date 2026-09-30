@@ -72,6 +72,8 @@ public static partial class Gen5SpirvTranslator
         private readonly bool _enableGraphicsSubgroupOperations;
         private readonly uint _waveLaneCount;
         private readonly bool _emulateWave64;
+        private readonly bool _hasIndirectControlFlow;
+        private readonly Dictionary<uint, Dictionary<uint, uint>> _savedLaneValues = new();
 
         // Safety valve for the PC-dispatcher loop. Each iteration executes one
         // GCN basic block; a correctly-translated shader always reaches its
@@ -1357,6 +1359,7 @@ public static partial class Gen5SpirvTranslator
             error = string.Empty;
             var block = blocks[blockIndex];
             var halfMaskPlan = HalfMaskPlan();
+            _savedLaneValues.Clear();
             // One guest wave can span two host subgroups. Keep its shared-memory phases ordered.
             // The half-mask plan inserts its own barriers; other wave64 programs also
             // need LDS phase ordering when reads and writes span basic blocks.
@@ -7178,6 +7181,7 @@ public static partial class Gen5SpirvTranslator
 
         private void StoreVDynamic(uint registerIndex, uint value)
         {
+            _savedLaneValues.Clear();
             var pointer = DynamicVectorPointer(registerIndex);
             if (_execKnownFull)
             {
@@ -7259,8 +7263,9 @@ public static partial class Gen5SpirvTranslator
             return _execFullPcs.Contains(pc);
         }
 
-        private void StoreV(uint register, uint value, bool guardWithExec = true)
+        private void StoreV(uint register, uint value, bool guardWithExec = true, bool preserveSavedLanes = false)
         {
+            if (!preserveSavedLanes) _savedLaneValues.Remove(register);
             if (guardWithExec && !_execKnownFull)
             {
                 var active = Load(_boolType, _exec);
