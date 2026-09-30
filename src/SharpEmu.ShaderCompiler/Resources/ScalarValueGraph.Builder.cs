@@ -552,7 +552,7 @@ public sealed partial class ScalarValueGraph
                 return;
             }
 
-            if (opcode is "SBcnt1I32B64" or "SFF1I32B64" or "SWqmB64" or "SBfeI64")
+            if (opcode is "SBcnt1I32B64" or "SFF1I32B64" or "SFlbitI32B64" or "SWqmB64" or "SBfeI64")
             {
                 // Bit counting, lane scans and quad masks are not uniform descriptor values.
                 var (low, high) = ReadPair(instruction.Sources[0], state);
@@ -568,6 +568,15 @@ public sealed partial class ScalarValueGraph
                         var highLsb = Binary(ScalarOperation.IAdd32, Unary(ScalarOperation.FindLowestBit32, high), _graph.Constant(32u));
                         var result = _graph.Select(Bool(ScalarOperation.INotEqual32, low, _graph.Constant(0u)), lowLsb,
                             _graph.Select(Bool(ScalarOperation.INotEqual32, high, _graph.Constant(0u)), highLsb, _graph.Constant(uint.MaxValue)));
+                        state.WriteScalar(destinationRegister, result);
+                        break;
+                    }
+                    case "SFlbitI32B64":
+                    {
+                        var highIndex = Binary(ScalarOperation.ISub32, _graph.Constant(31u), Unary(ScalarOperation.FindHighestBit32, high));
+                        var lowIndex = Binary(ScalarOperation.ISub32, _graph.Constant(63u), Unary(ScalarOperation.FindHighestBit32, low));
+                        var result = _graph.Select(Bool(ScalarOperation.INotEqual32, high, _graph.Constant(0u)), highIndex,
+                            _graph.Select(Bool(ScalarOperation.INotEqual32, low, _graph.Constant(0u)), lowIndex, _graph.Constant(uint.MaxValue)));
                         state.WriteScalar(destinationRegister, result);
                         break;
                     }

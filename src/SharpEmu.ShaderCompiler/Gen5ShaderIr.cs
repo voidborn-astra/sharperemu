@@ -325,7 +325,11 @@ public sealed record Gen5ShaderInstruction(
     IReadOnlyList<uint> Words,
     IReadOnlyList<Gen5Operand> Sources,
     IReadOnlyList<Gen5Operand> Destinations,
-    Gen5InstructionControl? Control);
+    Gen5InstructionControl? Control)
+{
+    public uint DestinationWidth => Opcode is "SBcnt1I32B64" or "SFF1I32B64" or "SFlbitI32B64"
+        ? 1u : Opcode.Contains("64", StringComparison.Ordinal) ? 2u : 1u;
+}
 
 public sealed record Gen5ShaderProgram(
     ulong Address,
