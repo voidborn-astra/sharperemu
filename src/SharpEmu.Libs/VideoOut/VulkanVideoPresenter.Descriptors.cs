@@ -64,6 +64,7 @@ internal static unsafe partial class VulkanVideoPresenter
             ShaderStageKind.Vertex => ShaderStage.Vertex,
             ShaderStageKind.Pixel => ShaderStage.Pixel,
             ShaderStageKind.Compute => ShaderStage.Compute,
+            ShaderStageKind.Mesh => ShaderStage.Mesh,
             _ => throw SubmissionScheduler.Fatal($"The stage kind is unknown: stage={program.Stage} hash=0x{program.Hash:X16}."),
         };
 
@@ -286,6 +287,7 @@ internal static unsafe partial class VulkanVideoPresenter
             }
 
             stage.WriteDispatchThreadLimits(shaderData);
+            stage.WriteMeshDrawParameters(shaderData);
             prepared.ShaderData = shaderData;
             if (layout.Find(DescriptorBindingKind.GlobalDataShare) is not null)
             {
