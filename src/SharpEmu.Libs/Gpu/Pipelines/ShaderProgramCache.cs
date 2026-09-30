@@ -526,7 +526,8 @@ internal sealed class ShaderProgramCache
             resources = ResourceMaterializer.ApplyTo(plan, specialization);
             layout = BindingLayout.Allocate(
                 resources.Info,
-                BindingLayout.CollectUserDataRegisters(program, source.UserDataBase, (uint)source.UserData.Length),
+                BindingLayout.CollectUserDataRegisters(program, source.UserDataBase, (uint)source.UserData.Length,
+                    plan.Graph.ExcludedUserDataRegisters),
                 BindingLayout.UsesGlobalDataShare(program),
                 ShaderCompileRequest.RequiresFlattenedTable(plan, resources),
                 BindingLayout.ReadsShaderBase(program),

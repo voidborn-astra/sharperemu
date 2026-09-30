@@ -363,7 +363,8 @@ public sealed class BindingLayout : IEquatable<BindingLayout>
 
     // The user-data registers live at program entry: those some path reads before it
     // writes them, found by liveness over the control-flow graph, in ascending order.
-    public static IReadOnlyList<uint> CollectUserDataRegisters(Gen5ShaderProgram program, uint userDataBase, uint userDataCount)
+    public static IReadOnlyList<uint> CollectUserDataRegisters(Gen5ShaderProgram program, uint userDataBase, uint userDataCount,
+        ulong excludedUserDataRegisters = 0)
     {
         var controlFlow = IrControlFlowGraph.Build(program.Instructions, Gen5IrBranchResolver.Instance);
         var blockCount = controlFlow.Blocks.Count;
@@ -417,7 +418,8 @@ public sealed class BindingLayout : IEquatable<BindingLayout>
         for (uint index = 0; index < userDataCount && blockCount != 0; index++)
         {
             var register = userDataBase + index;
-            if (register < ScalarRegisterCount && liveIn[0][register])
+            if (register < ScalarRegisterCount && liveIn[0][register] &&
+                (register >= 64 || (excludedUserDataRegisters & (1UL << (int)register)) == 0))
             {
                 registers.Add(register);
             }
