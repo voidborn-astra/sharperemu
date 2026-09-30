@@ -335,6 +335,21 @@ public sealed record Gen5ShaderProgram(
     ulong Address,
     IReadOnlyList<Gen5ShaderInstruction> Instructions)
 {
+    public ulong ContinuationAddress { get; init; }
+
+    public uint ContinuationStartPc { get; init; }
+
+    public ulong GetNextGuestAddressOffset(Gen5ShaderInstruction instruction)
+    {
+        var instructionEnd = (ulong)instruction.Pc + (ulong)(instruction.Words.Count * sizeof(uint));
+        if (ContinuationAddress == 0 || instruction.Pc < ContinuationStartPc)
+        {
+            return instructionEnd;
+        }
+
+        return unchecked(ContinuationAddress - Address + instructionEnd - ContinuationStartPc);
+    }
+
     private const uint PixelColorTargetCount = 8;
     private const int PixelColorMaskBits = 4;
     private readonly uint _pixelColorExportMasks = ComputePixelColorExportMasks(Instructions);

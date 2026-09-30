@@ -25,7 +25,11 @@ public sealed class EmbeddedVertexFetchPlan
         return new Gen5ShaderProgram(program.Address, program.Instructions.Select(instruction =>
             replacedLoads.Contains(instruction.Pc) && instruction.Control is Gen5ScalarMemoryControl
                 ? instruction with { Encoding = Gen5ShaderEncoding.Sopp, Opcode = "SNop", Sources = [], Destinations = [], Control = null }
-                : instruction).ToArray());
+                : instruction).ToArray())
+        {
+            ContinuationAddress = program.ContinuationAddress,
+            ContinuationStartPc = program.ContinuationStartPc,
+        };
     }
 }
 

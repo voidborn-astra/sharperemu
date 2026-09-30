@@ -195,9 +195,8 @@ public static partial class Gen5ShaderTranslator
             return false;
         }
 
-        if (parts.ContinuationAddress <= entryAddress ||
-            parts.ContinuationAddress - entryAddress > uint.MaxValue ||
-            ((parts.ContinuationAddress - entryAddress) & (sizeof(uint) - 1)) != 0)
+        if (parts.ContinuationAddress == entryAddress ||
+            (parts.ContinuationAddress & (sizeof(uint) - 1)) != 0)
         {
             error = $"invalid-fused-layout entry=0x{entryAddress:X} " +
                 $"continuation=0x{parts.ContinuationAddress:X}";
@@ -237,7 +236,15 @@ public static partial class Gen5ShaderTranslator
             return false;
         }
 
-        var continuationPc = checked((uint)(parts.ContinuationAddress - entryAddress));
+        var entryEndPc = (ulong)entryProgram.Instructions[^1].Pc +
+            (ulong)(entryProgram.Instructions[^1].Words.Count * sizeof(uint));
+        if (entryEndPc > uint.MaxValue)
+        {
+            error = $"fused-entry-pc-overflow pc=0x{entryEndPc:X}";
+            return false;
+        }
+
+        var continuationStartPc = (uint)entryEndPc;
         var instructions = new List<Gen5ShaderInstruction>(
             entryProgram.Instructions.Count + continuationProgram.Instructions.Count);
         instructions.AddRange(entryProgram.Instructions.Take(entryProgram.Instructions.Count - 1));
@@ -255,18 +262,22 @@ public static partial class Gen5ShaderTranslator
 
         foreach (var instruction in continuationProgram.Instructions)
         {
-            var rebasedPc = (ulong)continuationPc + instruction.Pc;
+            var rebasedPc = (ulong)continuationStartPc + instruction.Pc;
             if (rebasedPc > uint.MaxValue)
             {
                 error = $"fused-continuation-pc-overflow pc=0x{instruction.Pc:X} " +
-                    $"base=0x{continuationPc:X}";
+                    $"base=0x{continuationStartPc:X}";
                 return false;
             }
 
             instructions.Add(instruction with { Pc = (uint)rebasedPc });
         }
 
-        program = new Gen5ShaderProgram(entryAddress, instructions);
+        program = new Gen5ShaderProgram(entryAddress, instructions)
+        {
+            ContinuationAddress = parts.ContinuationAddress,
+            ContinuationStartPc = continuationStartPc,
+        };
         error = string.Empty;
         return true;
     }
