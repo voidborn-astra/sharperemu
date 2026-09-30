@@ -107,7 +107,9 @@ public sealed partial class GuestImageCache
         }
 
         _scheduledReadbacks.Remove(imageIdentifier);
-        if (image.Description.HasMetadata)
+        if (image.Description.HasMetadata &&
+            _surfaceMetadata.TryGetValue(image.Description.Metadata.Range.Address, out var registeredMetadata) &&
+            ReferenceEquals(registeredMetadata, image.MetadataRegistration))
         {
             _surfaceMetadata.Remove(image.Description.Metadata.Range.Address);
         }
@@ -363,7 +365,7 @@ public sealed partial class GuestImageCache
     bool IGuestImageStore.MarkCpuWrite(ulong address, ulong size)
     {
         GpuMemoryAccessProfile.CountImageCpuWrite();
-        if (!IsValidRange(address, size) || !_pageOwners.MayHaveOwners(address, size))
+        if (!IsValidRange(address, size))
         {
             return false;
         }
@@ -378,6 +380,13 @@ public sealed partial class GuestImageCache
         }
 
         using var held = _lock.Hold();
+        if (!_pageOwners.MayHaveOwners(address, size))
+        {
+            // Metadata can occupy a page with no image data owner.
+            InvalidateMetadataForCpuWrite(address, size);
+            return false;
+        }
+
         return InvalidateAliases(address, size);
     }
 
@@ -418,6 +427,7 @@ public sealed partial class GuestImageCache
     // or makes the image maybe dirty. Returns whether any image shares a page with the range.
     private bool InvalidateAliases(ulong address, ulong size)
     {
+        InvalidateMetadataForCpuWrite(address, size);
         var pageBegin = address & ~(TrackerLayout.PageBytes - 1);
         var pageEnd = (address + size + TrackerLayout.PageBytes - 1) & ~(TrackerLayout.PageBytes - 1);
         var covered = false;

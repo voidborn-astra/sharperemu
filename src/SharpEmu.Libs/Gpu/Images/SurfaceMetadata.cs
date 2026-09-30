@@ -20,4 +20,6 @@ public sealed class SurfaceMetadata
     public uint ClearMask;
     public uint FillValue = 0xffffffff;
     public ulong FillSize;
+    public ulong RangeSize;
+    public bool Invalidated;
 }
