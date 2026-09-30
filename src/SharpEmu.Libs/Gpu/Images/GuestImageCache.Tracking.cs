@@ -92,6 +92,7 @@ public sealed partial class GuestImageCache
             foreach (var association in associations)
             {
                 var associated = _slots[association];
+                ReportImageLifetime(associated, "delete-depth-association", deletion: true);
                 if (associated.IsGpuModified)
                 {
                     associated.ClearGpuModified();
@@ -370,11 +371,8 @@ public sealed partial class GuestImageCache
             return false;
         }
 
-        // Most CPU writes (AGC command building, labels) touch no image page. Checking
-        // the page owners without the lock keeps those writes from spinning behind the
-        // render thread, which holds the lock for most of a frame. The check sees the
-        // same state a locked call made before the write would.
-        if (!MayOwnPages(address, size))
+        // Skip the lock only when neither image pages nor metadata can cover the write.
+        if (!MayOwnPages(address, size) && !MayOverlapMetadata(address, size))
         {
             return false;
         }

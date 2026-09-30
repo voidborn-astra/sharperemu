@@ -12,6 +12,8 @@ public sealed partial class GuestImageCache
     {
         using var held = _lock.Hold();
         var tick = _collectionTick++;
+        if (SharpEmu.Libs.VideoOut.RenderPhaseProfile.Enabled && tick % 300 == 0)
+            ReportImageMemory("collection", true, tick);
         if (_totalUsedMemory < _collectionStartBytes)
         {
             return;
@@ -28,6 +30,7 @@ public sealed partial class GuestImageCache
     {
         var pressured = _totalUsedMemory >= _memoryPressureBytes;
         var aggressive = allowAggressive && _totalUsedMemory >= _criticalMemoryBytes;
+        var profile = SharpEmu.Libs.VideoOut.RenderPhaseProfile.Enabled;
         var age = Math.Min(aggressive ? 160UL : pressured ? 80UL : 16UL, tick);
         var deletions = aggressive ? 40 : pressured ? 20 : 10;
         var candidates = new List<ResourceSlotIdentifier>(deletions);
@@ -41,9 +44,11 @@ public sealed partial class GuestImageCache
             }
 
             deletions--;
+            if (profile) _collectionCandidates++;
             var owner = _slots.TryGet(imageIdentifier);
             if (owner == null || !owner.Registered || owner.DepthOwner.IsValid)
             {
+                if (profile && owner?.DepthOwner.IsValid == true) _collectionAssociations++;
                 continue;
             }
 
@@ -60,27 +65,37 @@ public sealed partial class GuestImageCache
                 // A dirty buffer overlap does not prove that it replaces the image contents.
                 if (!safe && owner.SafeToDownload)
                 {
+                    if (profile) _collectionBufferOverlapRetentions++;
                     continue;
                 }
                 if (safe && owner.Description.IsTiled)
                 {
+                    if (profile) _collectionTiledRetentions++;
                     continue;
                 }
 
                 if (safe && !pressured)
                 {
+                    if (profile) _collectionUnpressuredRetentions++;
                     continue;
                 }
 
                 if (safe && !TryDownloadToGuest(imageIdentifier))
                 {
+                    if (profile) _collectionReadbackFailures++;
                     continue;
                 }
 
+                ReportImageLifetime(owner, safe ? "collect-readback-queued" : "collect-unreadable-gpu", deletion: true);
                 owner.ClearGpuModified();
+            }
+            else
+            {
+                ReportImageLifetime(owner, "collect-no-gpu-ownership", deletion: true);
             }
 
             DeleteImage(imageIdentifier);
+            if (profile) _collectionDeletions++;
             if (_totalUsedMemory < _criticalMemoryBytes && aggressive)
             {
                 deletions >>= 2;
@@ -249,6 +264,7 @@ public sealed partial class GuestImageCache
     internal void RegisterHtileMetadataForTest(ulong address)
     {
         using var held = _lock.Hold();
+        IncludeMetadataWriteRange(address, 1);
         if (!_surfaceMetadata.TryGetValue(address, out var metadata))
         {
             metadata = new SurfaceMetadata();
